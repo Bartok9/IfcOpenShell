@@ -109,6 +109,8 @@ classes = (
     operator.ToggleTargetView,
     operator.OpenDocumentationWebUi,
     operator.FilterSelectedObjectsIfIntersectedByCamera,
+    operator.SetDimensionAnchor,
+    operator.RegenerateDimensions,
     prop.Variable,
     prop.Drawing,
     prop.Document,
@@ -194,6 +196,7 @@ def register():
     bpy.types.TextCurve.BIMTextProperties = bpy.props.PointerProperty(type=prop.BIMTextProperties)
     bpy.app.handlers.load_post.append(handler.load_post)
     bpy.app.handlers.depsgraph_update_pre.append(handler.depsgraph_update_pre_handler)
+    bpy.app.handlers.depsgraph_update_post.append(handler.depsgraph_update_post_handler)
     bpy.types.VIEW3D_MT_image_add.append(ui.add_object_button)
     bpy.types.VIEW3D_MT_object_context_menu.append(menu_func)
 
@@ -209,5 +212,6 @@ def unregister():
     del bpy.types.TextCurve.BIMTextProperties
     bpy.app.handlers.load_post.remove(handler.load_post)
     bpy.app.handlers.depsgraph_update_pre.remove(handler.depsgraph_update_pre_handler)
+    bpy.app.handlers.depsgraph_update_post.remove(handler.depsgraph_update_post_handler)
     bpy.types.VIEW3D_MT_image_add.remove(ui.add_object_button)
     bpy.types.VIEW3D_MT_object_context_menu.remove(menu_func)
