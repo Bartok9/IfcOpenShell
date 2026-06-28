@@ -872,7 +872,11 @@ class SvgWriter:
 
         v1 = self.project_point_onto_camera(obj.matrix_world @ Vector((0, 0, 0)))
         v2 = self.project_point_onto_camera(obj.matrix_world @ Vector((0, 0, -1)))
-        angle = -math.degrees((v2 - v1).xy.angle_signed(Vector((0, 1))))
+        delta = (v2 - v1).xy
+        if delta.length <= 1e-6:
+            v2 = self.project_point_onto_camera(obj.matrix_world @ Vector((1, 0, 0)))
+            delta = (v2 - v1).xy
+        angle = -math.degrees(delta.angle_signed(Vector((0, 1)))) if delta.length > 1e-6 else 90.0
 
         transform = "rotate({}, {}, {})".format(angle, *symbol_position_svg.xy)
 
@@ -892,9 +896,35 @@ class SvgWriter:
         )
 
     def get_reference_and_sheet_id_from_annotation(self, element: ifcopenshell.entity_instance) -> tuple[str, str]:
-        reference_id = "-"
-        sheet_id = "-"
+        is_ifc2x3 = tool.Ifc.get_schema() == "IFC2X3"
+
+        # Document-reference annotations link to an IfcDocumentInformation via
+        # IfcRelAssociatesDocument rather than to a drawing product.
+        if tool.Drawing.is_document_reference(element):
+            doc_info = tool.Drawing.get_annotation_reference_doc(element)
+            if not doc_info:
+                return ("-", "-")
+            ext_location = tool.Drawing.get_path_with_ext(
+                (doc_info.DocumentReferences[0].Location if is_ifc2x3 else doc_info.HasDocumentReferences[0].Location),
+                "svg",
+            ) if (doc_info.DocumentReferences if is_ifc2x3 else doc_info.HasDocumentReferences) else None
+            if not ext_location:
+                return ("-", "-")
+            for sheet_reference in tool.Ifc.get().by_type("IfcDocumentReference"):
+                if tool.Drawing.get_reference_description(sheet_reference) != "REFERENCE":
+                    continue
+                if sheet_reference.Location != ext_location:
+                    continue
+                sheet = tool.Drawing.get_reference_document(sheet_reference)
+                if sheet:
+                    if is_ifc2x3:
+                        return (sheet_reference.ItemReference or "-", sheet.DocumentId or "-")
+                    return (sheet_reference.Identification or "-", sheet.Identification or "-")
+            return ("-", "-")
+
         drawing = tool.Drawing.get_annotation_element(element)
+        if not drawing:
+            return ("-", "-")
         reference = tool.Drawing.get_drawing_reference(drawing)
         if reference:
             for sheet_reference in tool.Ifc.get().by_type("IfcDocumentReference"):
@@ -903,13 +933,9 @@ class SvgWriter:
                     continue
                 sheet = tool.Drawing.get_reference_document(sheet_reference)
                 if sheet:
-                    if tool.Ifc.get_schema() == "IFC2X3":
-                        reference_id = sheet_reference.ItemReference or "-"
-                        sheet_id = sheet.DocumentId or "-"
-                    else:
-                        reference_id = sheet_reference.Identification or "-"
-                        sheet_id = sheet.Identification or "-"
-                    return (reference_id, sheet_id)
+                    if is_ifc2x3:
+                        return (sheet_reference.ItemReference or "-", sheet.DocumentId or "-")
+                    return (sheet_reference.Identification or "-", sheet.Identification or "-")
                 break
         return ("-", "-")
 
