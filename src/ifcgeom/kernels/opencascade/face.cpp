@@ -32,6 +32,8 @@
 #include <ShapeFix_ShapeTolerance.hxx>
 #include <BRep_Tool.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
+#include <Bnd_Box.hxx>
+#include <BRepBndLib.hxx>
 
 #include <Standard_Macro.hxx>
 #include <TopoDS_Shape.hxx>
@@ -364,11 +366,29 @@ bool OpenCascadeKernel::convert(const taxonomy::face::ptr face, TopoDS_Shape& re
 	// positive; a distance at (or below) the modelling precision means the
 	// boundaries touch or cross. Emit a clear warning so the invalid input is
 	// not silently lost. wires() is ordered outer-first, inner-bounds after.
+	//
+	// BRepExtrema_DistShapeShape is expensive, and for a normal holed face the
+	// inner boundaries sit clear of the outer boundary and of each other, so the
+	// distance is always positive and no warning is due. Pre-filter with an axis
+	// aligned bounding box per wire: the box gap is a lower bound on the true
+	// wire distance, so a pair whose boxes are more than precision_ apart cannot
+	// touch or cross and is rejected in O(1) without the distance call. Each box
+	// is enlarged by precision_ so touching boxes are still tested precisely;
+	// only box-overlapping pairs pay for the exact DistShapeShape, giving the
+	// identical GEO 402 result as before with no false positives or negatives.
 	if (fd.wires().size() > 1) {
 		const auto& fwires = fd.wires();
+		std::vector<Bnd_Box> boxes(fwires.size());
+		for (size_t i = 0; i < fwires.size(); ++i) {
+			BRepBndLib::Add(fwires[i], boxes[i]);
+			boxes[i].Enlarge(precision_);
+		}
 		bool reported = false;
 		for (size_t i = 1; i < fwires.size() && !reported; ++i) {
 			for (size_t j = 0; j < i && !reported; ++j) {
+				if (boxes[i].IsOut(boxes[j])) {
+					continue;
+				}
 				BRepExtrema_DistShapeShape dss(fwires[i], fwires[j]);
 				if (dss.IsDone() && dss.Value() < precision_) {
 					logger().Warning("GEO", 402, "Face inner boundary intersects another face boundary", face->instance);
