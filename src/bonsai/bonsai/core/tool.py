@@ -355,7 +355,7 @@ class Drawing:
     def enable_editing_schedules(cls): pass
     def enable_editing_sheets(cls): pass
     def enable_editing_text(cls, obj): pass
-    def ensure_unique_drawing_name(cls, name): pass
+    def ensure_unique_drawing_name(cls, name, ignore=None): pass
     def ensure_unique_identification(cls, identification): pass
     def export_font_size(cls, obj): pass
     def export_symbol(cls, obj): pass
