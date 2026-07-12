@@ -50,7 +50,7 @@ class Patcher:
         self.optimized_file = ifcopenshell.file(schema=self.file.schema)
 
     def patch(self):
-        from toposort import toposort_flatten as toposort
+        from graphlib import TopologicalSorter
 
         def generate_instances_and_references():
             """
@@ -66,7 +66,7 @@ class Patcher:
             """
             Recursive function which replicates an entity instance, with
             its attributes, mapping references to already registered
-            instances. Indeed, because of the toposort we know that
+            instances. Indeed, because of the topological sort we know that
             forward attribute value instances are mapped before the instances
             that reference them.
             """
@@ -75,7 +75,7 @@ class Patcher:
                 return type(v)(map(map_value, v))
             elif isinstance(v, ifcopenshell.entity_instance):
                 if v.id() == 0:
-                    # express simple types are not part of the toposort and just copied
+                    # express simple types are not part of the topological sort and just copied
                     return self.optimized_file.create_entity(v.is_a(), v[0])
 
                 return instance_mapping[v]
@@ -85,7 +85,10 @@ class Patcher:
 
         info_to_id = {}
 
-        for id in toposort(dict(generate_instances_and_references())):
+        # Instances are processed in topological order so that every forward
+        # reference has already been mapped before the instance referencing it.
+        graph = TopologicalSorter(dict(generate_instances_and_references()))
+        for id in graph.static_order():
             inst = self.file[id]
             info = inst.get_info(include_identifier=False, recursive=True, return_type=frozenset)
             if info in info_to_id:
